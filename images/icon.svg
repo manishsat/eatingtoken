@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <rect width="128" height="128" rx="16" fill="#1e1e1e"/>
-  <text x="64" y="78" font-family="Arial, sans-serif" font-size="64" font-weight="bold" fill="#ff6b35" text-anchor="middle">ET</text>
-  <circle cx="98" cy="32" r="12" fill="#ff6b35" opacity="0.8"/>
-  <path d="M93 28 l5 4 l5-4" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <path d="M93 32 l5 4 l5-4" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Coin with bite taken out -->
+  <path d="M21 12a9 9 0 1 1-4.4-7.7 3.5 3.5 0 0 0-.1 4.2A3.5 3.5 0 0 0 21 9.5V12z" fill="#C5C5C5"/>
+  <!-- T for Token -->
+  <path d="M7.5 8.5h7M11 8.5v8" stroke="#1e1e1e" stroke-width="2" stroke-linecap="round"/>
 </svg>
