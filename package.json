@@ -2,7 +2,7 @@
   "name": "eatingtoken",
   "displayName": "Eating Token - Copilot Token Tracker",
   "description": "Track your GitHub Copilot token consumption and estimated cost in real-time. Know exactly how many tokens you're eating.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "manishsatwani",
   "license": "MIT",
   "engines": {

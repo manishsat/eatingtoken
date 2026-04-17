@@ -24,7 +24,7 @@ import { CompletionTracker } from './completionTracker';
 import { ChatTracker } from './chatTracker';
 import { CopilotSessionWatcher } from './copilotSessionWatcher';
 import { CopilotLogWatcher } from './copilotLogWatcher';
-import { estimateCost, resolveModelPricing } from './tokenCounter';
+import { estimateCost, estimateEnergy, resolveModelPricing } from './tokenCounter';
 import { UsageStorage } from './usageStorage';
 import { StatusBarManager } from './statusBar';
 import { DashboardPanel, DashboardViewProvider } from './dashboard';
@@ -183,11 +183,13 @@ export function activate(context: vscode.ExtensionContext) {
   completionTracker.onCompletionEvent(async (event) => {
     if (event.type === 'request') {
       const cost = estimateCost(event.inputTokens, 0, costModel);
-      statusBar.addInputTokens(event.inputTokens, cost.totalCost);
+      const energy = estimateEnergy(event.inputTokens, 0, costModel);
+      statusBar.addInputTokens(event.inputTokens, cost.totalCost, energy.totalWh);
       await usageStorage.recordRequest(event.language, event.inputTokens, cost.totalCost);
     } else if (event.type === 'acceptance') {
       const cost = estimateCost(0, event.outputTokens, costModel);
-      statusBar.addOutputTokens(event.outputTokens, cost.totalCost);
+      const energy = estimateEnergy(0, event.outputTokens, costModel);
+      statusBar.addOutputTokens(event.outputTokens, cost.totalCost, energy.totalWh);
       await usageStorage.recordAcceptance(event.language, event.outputTokens, cost.totalCost);
     }
     refreshDashboard();
@@ -202,9 +204,11 @@ export function activate(context: vscode.ExtensionContext) {
   chatTracker.onChatEvent(async (event) => {
     const inputCost = estimateCost(event.estimatedInputTokens, 0, costModel);
     const outputCost = estimateCost(0, event.estimatedOutputTokens, costModel);
+    const inputEnergy = estimateEnergy(event.estimatedInputTokens, 0, costModel);
+    const outputEnergy = estimateEnergy(0, event.estimatedOutputTokens, costModel);
 
-    statusBar.addInputTokens(event.estimatedInputTokens, inputCost.totalCost);
-    statusBar.addOutputTokens(event.estimatedOutputTokens, outputCost.totalCost);
+    statusBar.addInputTokens(event.estimatedInputTokens, inputCost.totalCost, inputEnergy.totalWh);
+    statusBar.addOutputTokens(event.estimatedOutputTokens, outputCost.totalCost, outputEnergy.totalWh);
 
     await usageStorage.recordRequest(event.language, event.estimatedInputTokens, inputCost.totalCost);
     await usageStorage.recordAcceptance(event.language, event.estimatedOutputTokens, outputCost.totalCost);
@@ -233,10 +237,11 @@ export function activate(context: vscode.ExtensionContext) {
     if (event.type === 'message') {
       // Per-message events only have outputTokens
       const cost = estimateCost(0, event.outputTokens, pricingModel);
+      const energy = estimateEnergy(0, event.outputTokens, pricingModel);
 
       // Only update status bar for live events, not historical imports
       if (isLive) {
-        statusBar.addOutputTokens(event.outputTokens, cost.totalCost);
+        statusBar.addOutputTokens(event.outputTokens, cost.totalCost, energy.totalWh);
       }
 
       // Always record to storage with correct date and model
@@ -246,10 +251,12 @@ export function activate(context: vscode.ExtensionContext) {
       // Session summaries have full token breakdown
       const inputCost = estimateCost(event.inputTokens, 0, pricingModel);
       const outputCost = estimateCost(0, event.outputTokens, pricingModel);
+      const inputEnergy = estimateEnergy(event.inputTokens, 0, pricingModel);
+      const outputEnergy = estimateEnergy(0, event.outputTokens, pricingModel);
 
       if (isLive) {
-        statusBar.addInputTokens(event.inputTokens, inputCost.totalCost);
-        statusBar.addOutputTokens(event.outputTokens, outputCost.totalCost);
+        statusBar.addInputTokens(event.inputTokens, inputCost.totalCost, inputEnergy.totalWh);
+        statusBar.addOutputTokens(event.outputTokens, outputCost.totalCost, outputEnergy.totalWh);
       }
 
       await usageStorage.recordRequest('copilot-agent', event.inputTokens, inputCost.totalCost, event.timestamp, pricingModel);
@@ -287,10 +294,12 @@ export function activate(context: vscode.ExtensionContext) {
     const pricingModel = resolveModelPricing(event.entry.model);
     const inputCost = estimateCost(event.estimatedInputTokens, 0, pricingModel);
     const outputCost = estimateCost(0, event.estimatedOutputTokens, pricingModel);
+    const inputEnergy = estimateEnergy(event.estimatedInputTokens, 0, pricingModel);
+    const outputEnergy = estimateEnergy(0, event.estimatedOutputTokens, pricingModel);
 
     if (isLive) {
-      statusBar.addInputTokens(event.estimatedInputTokens, inputCost.totalCost);
-      statusBar.addOutputTokens(event.estimatedOutputTokens, outputCost.totalCost);
+      statusBar.addInputTokens(event.estimatedInputTokens, inputCost.totalCost, inputEnergy.totalWh);
+      statusBar.addOutputTokens(event.estimatedOutputTokens, outputCost.totalCost, outputEnergy.totalWh);
     }
 
     await usageStorage.recordRequest('copilot-chat', event.estimatedInputTokens, inputCost.totalCost, event.timestamp, pricingModel);

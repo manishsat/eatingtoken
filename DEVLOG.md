@@ -408,3 +408,67 @@ Both watchers (session and log) were updated for safer multi-window operation:
 3. **Cost estimates use market-equivalent pricing** since Copilot's actual internal cost structure is unknown
 4. **Token estimation from duration** (log watcher) is rough -- network conditions and prompt processing time vary
 5. **The session watcher depends on `~/.copilot/session-state/`** which is specific to Copilot's agent mode; standard Copilot Chat may not write to this location in all configurations
+
+---
+
+## Entry 14: Energy & Environment Tracking (v0.3.0)
+
+### The Question
+
+We can see how many tokens we're eating and how much they cost. But how much electricity are we burning? What's the carbon footprint of our AI-assisted coding?
+
+### Research
+
+We studied energy consumption data from:
+- **Luccioni et al. (2023)** "Power Hungry Processing: Watts Driving the Cost of AI Deployment?" -- systematic inference energy measurements across model classes
+- **NVIDIA H100 specifications** -- 700W TDP, measured throughput rates per model size
+- **SemiAnalysis** cost modeling -- inference costs that back-derive to power consumption
+- **EPA eGRID 2023** -- US grid average carbon intensity of 0.39 kg CO2/kWh
+
+### Energy Model
+
+We built per-model energy estimates in Watt-hours per token, accounting for:
+
+1. **GPU power draw**: H100 at ~700W TDP during inference
+2. **Throughput rates**: Model-specific (gpt-4o-mini ~800 tok/s, gpt-4o ~80 tok/s, claude-opus ~40 tok/s)
+3. **Server overhead**: CPU, memory, networking add ~30% on top of GPU
+4. **Data center PUE**: Power Usage Effectiveness of 1.2 (hyperscaler average)
+5. **Prefill vs decode**: Input tokens (parallelized prefill) are ~10x cheaper than output tokens (sequential autoregressive decode)
+
+| Model | Input (Wh/token) | Output (Wh/token) | Notes |
+|-------|------------------|--------------------|-------|
+| gpt-4o-mini | 0.000040 | 0.00040 | ~8B params, very efficient |
+| gpt-4o | 0.00038 | 0.0038 | ~200B MoE |
+| gpt-4.1 | 0.00035 | 0.0035 | Similar to 4o |
+| gpt-4 | 0.0010 | 0.010 | ~1.8T dense, power hungry |
+| claude-opus-4.6 | 0.00080 | 0.0080 | Large model, slower decode |
+| claude-sonnet-4 | 0.00038 | 0.0038 | Medium, efficient |
+| claude-sonnet-3.5 | 0.00038 | 0.0038 | Medium, efficient |
+
+### What We Built
+
+**`tokenCounter.ts`** -- Added `MODEL_ENERGY` table, `estimateEnergy()`, `estimateCO2Grams()`, `getEnergyComparisons()`, `formatEnergy()`, `formatCO2()`, and `whToKwh()`.
+
+**Status bar** -- Tooltip now shows energy consumption and CO2 emissions for the current session.
+
+**Dashboard** -- New "Energy & Environment" section with:
+- Today's energy and CO2
+- All-time energy and CO2
+- Average daily energy with yearly projection
+- Energy over time chart (bar chart, 7/30 day toggle)
+- Real-world equivalents: phone charges, LED bulb hours, Google searches, EV miles
+
+**Sidebar** -- Added energy summary with today's energy and total CO2.
+
+**Tests** -- 23 new tests covering energy estimation, CO2 calculation, formatting, comparisons, and model energy data validation. Total: 111 tests, all passing.
+
+### Important Caveats
+
+These are estimates. Actual energy consumption varies significantly based on:
+- Which hardware the provider is running (H100 vs A100 vs TPU)
+- Batch size and utilization rates
+- Data center location and PUE
+- Whether the request hits KV cache
+- Provider-specific optimizations (quantization, speculative decoding, etc.)
+
+Our estimates are based on a reasonable "H100 at moderate utilization" baseline. They're meant to give directional awareness, not precise accounting.

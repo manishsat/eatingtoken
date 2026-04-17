@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UsageSummary, DailyUsage } from './usageStorage';
-import { formatTokenCount, formatCost } from './tokenCounter';
+import { formatTokenCount, formatCost, estimateEnergy, estimateCO2Grams, formatEnergy, formatCO2, getEnergyComparisons, MODEL_ENERGY } from './tokenCounter';
 
 // ─── Helper types ─────────────────────────────────────────────────────────────
 
@@ -194,6 +194,46 @@ export class DashboardPanel {
     const lastWeekCost = lastWeekDays.reduce((s, d) => s + d.estimatedCostUsd, 0);
     const costTrend = lastWeekCost > 0 ? ((thisWeekCost - lastWeekCost) / lastWeekCost) * 100 : 0;
 
+    // ── Energy calculations ──
+    // Calculate energy from all-time token data per model
+    const allTimeModelBreakdown = aggregateModels(summary.thisMonth);
+    let totalEnergyWh = 0;
+    let todayEnergyWh = 0;
+
+    // All-time energy by model
+    for (const [model, data] of Object.entries(allTimeModelBreakdown)) {
+      const energy = estimateEnergy(data.inputTokens, data.outputTokens, model);
+      totalEnergyWh += energy.totalWh;
+    }
+    // If no per-model data, estimate from totals using default model
+    if (Object.keys(allTimeModelBreakdown).length === 0 && (allTime.totalInputTokens + allTime.totalOutputTokens) > 0) {
+      const energy = estimateEnergy(allTime.totalInputTokens, allTime.totalOutputTokens, 'gpt-4o');
+      totalEnergyWh = energy.totalWh;
+    }
+
+    // Today's energy by model
+    if (today.byModel && Object.keys(today.byModel).length > 0) {
+      for (const [model, data] of Object.entries(today.byModel)) {
+        const energy = estimateEnergy(data.inputTokens, data.outputTokens, model);
+        todayEnergyWh += energy.totalWh;
+      }
+    } else {
+      const energy = estimateEnergy(today.totalInputTokens, today.totalOutputTokens, 'gpt-4o');
+      todayEnergyWh = energy.totalWh;
+    }
+
+    const totalCO2 = estimateCO2Grams(totalEnergyWh);
+    const todayCO2 = estimateCO2Grams(todayEnergyWh);
+    const comparisons = getEnergyComparisons(totalEnergyWh);
+    const dailyAvgEnergy = totalEnergyWh / daysSinceStart;
+    const projectedYearlyEnergy = dailyAvgEnergy * 365;
+
+    // Per-model energy breakdown for chart
+    const modelEnergyEntries = modelEntries.map(([model, data]) => {
+      const energy = estimateEnergy(data.inputTokens, data.outputTokens, model);
+      return { model, energyWh: energy.totalWh };
+    });
+
     // Prepare JSON data for Chart.js
     const chartData = {
       weekLabels: weekData.map(d => d.date.slice(5)),
@@ -210,6 +250,30 @@ export class DashboardPanel {
       modelTokens: modelEntries.map(([, d]) => d.inputTokens + d.outputTokens),
       modelCosts: modelEntries.map(([, d]) => d.costUsd),
       modelColors: modelEntries.map(([m]) => getModelColor(m)),
+      // Energy data per day
+      weekEnergy: weekData.map(d => {
+        let wh = 0;
+        if (d.byModel && Object.keys(d.byModel).length > 0) {
+          for (const [model, data] of Object.entries(d.byModel)) {
+            wh += estimateEnergy(data.inputTokens, data.outputTokens, model).totalWh;
+          }
+        } else {
+          wh = estimateEnergy(d.totalInputTokens, d.totalOutputTokens, 'gpt-4o').totalWh;
+        }
+        return wh;
+      }),
+      monthEnergy: monthData.map(d => {
+        let wh = 0;
+        if (d.byModel && Object.keys(d.byModel).length > 0) {
+          for (const [model, data] of Object.entries(d.byModel)) {
+            wh += estimateEnergy(data.inputTokens, data.outputTokens, model).totalWh;
+          }
+        } else {
+          wh = estimateEnergy(d.totalInputTokens, d.totalOutputTokens, 'gpt-4o').totalWh;
+        }
+        return wh;
+      }),
+      modelEnergyWh: modelEnergyEntries.map(e => e.energyWh),
     };
 
     return /* html */ `<!DOCTYPE html>
@@ -545,7 +609,7 @@ export class DashboardPanel {
 <body>
   <div class="header">
     <h1>Eating Token</h1>
-    <span class="version">v0.2.0</span>
+    <span class="version">v0.3.0</span>
   </div>
   <p class="subtitle">Copilot Token Consumption Tracker</p>
 
@@ -644,6 +708,51 @@ export class DashboardPanel {
         <div class="proj-label">Projected Yearly</div>
         <div class="proj-value">${formatCost(projectedYearlyCost)}</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Energy & Environment ── -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Energy &amp; Environment</div>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Today's Energy</div>
+        <div class="value" style="color:var(--green)">${formatEnergy(todayEnergyWh)}</div>
+        <div class="detail">CO2: ${formatCO2(todayCO2)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">All-Time Energy</div>
+        <div class="value" style="color:var(--green)">${formatEnergy(totalEnergyWh)}</div>
+        <div class="detail">CO2: ${formatCO2(totalCO2)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Avg Energy/Day</div>
+        <div class="value" style="color:var(--green)">${formatEnergy(dailyAvgEnergy)}</div>
+        <div class="detail">Projected yearly: ${formatEnergy(projectedYearlyEnergy)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Carbon Intensity</div>
+        <div class="value" style="color:var(--green)">0.39</div>
+        <div class="detail">kg CO2/kWh (US grid avg)</div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;font-weight:500">Energy Over Time</div>
+      <div class="chart-container"><canvas id="energyChart"></canvas></div>
+    </div>
+    <div style="margin-top:20px">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;font-weight:500">Real-World Equivalents (All-Time)</div>
+      <div class="projection-grid" style="grid-template-columns:repeat(4,1fr)">
+        ${comparisons.map(c => `<div class="proj-card">
+          <div class="proj-label">${c.label}</div>
+          <div class="proj-value" style="color:var(--green)">${c.value}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--text-muted);font-style:italic">
+      Estimates based on GPU inference power draw (H100 TDP), data center PUE of 1.2, and US grid carbon intensity (EPA eGRID 2023). Actual consumption varies by provider infrastructure.
     </div>
   </div>
 
@@ -870,6 +979,54 @@ export class DashboardPanel {
       });
     }
 
+    // ── Energy Chart ──
+    const energyCtx = document.getElementById('energyChart').getContext('2d');
+    const energyChart = new Chart(energyCtx, {
+      type: 'bar',
+      data: {
+        labels: DATA.weekLabels,
+        datasets: [{
+          label: 'Energy (Wh)',
+          data: DATA.weekEnergy,
+          backgroundColor: 'rgba(16,185,129,0.7)',
+          borderRadius: 3,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            padding: 10,
+            cornerRadius: 6,
+            callbacks: {
+              label: function(ctx) {
+                const wh = Number(ctx.raw);
+                if (wh < 0.001) return (wh * 1000).toFixed(2) + ' mWh';
+                if (wh < 1) return wh.toFixed(3) + ' Wh';
+                return wh.toFixed(2) + ' Wh';
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { grid: { color: gridColor }, ticks: {
+            callback: function(v) {
+              const val = Number(v);
+              if (val < 0.001) return (val * 1000).toFixed(1) + 'mWh';
+              if (val < 1) return val.toFixed(3) + 'Wh';
+              return val.toFixed(1) + 'Wh';
+            }
+          }}
+        }
+      }
+    });
+
     // ── Time Range Toggle ──
     function switchRange(range) {
       document.querySelectorAll('.toggle-btn').forEach(btn => {
@@ -880,6 +1037,7 @@ export class DashboardPanel {
       const inputTokens = range === 'week' ? DATA.weekInputTokens : DATA.monthInputTokens;
       const outputTokens = range === 'week' ? DATA.weekOutputTokens : DATA.monthOutputTokens;
       const costs = range === 'week' ? DATA.weekCosts : DATA.monthCosts;
+      const energy = range === 'week' ? DATA.weekEnergy : DATA.monthEnergy;
 
       tokenChart.data.labels = labels;
       tokenChart.data.datasets[0].data = inputTokens;
@@ -889,6 +1047,10 @@ export class DashboardPanel {
       costChart.data.labels = labels;
       costChart.data.datasets[0].data = costs;
       costChart.update('none');
+
+      energyChart.data.labels = labels;
+      energyChart.data.datasets[0].data = energy;
+      energyChart.update('none');
     }
   </script>
 </body>
@@ -950,6 +1112,11 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       const projectedYearly = dailyAvgCost * 365;
       const progress = Math.min(100, (projectedYearly / yearlyTarget) * 100);
 
+      // Energy estimate for sidebar
+      const sidebarEnergy = estimateEnergy(allTime.totalInputTokens, allTime.totalOutputTokens, 'gpt-4o');
+      const sidebarCO2 = estimateCO2Grams(sidebarEnergy.totalWh);
+      const todayEnergy = estimateEnergy(today.totalInputTokens, today.totalOutputTokens, 'gpt-4o');
+
       this.view.webview.html = /* html */ `<!DOCTYPE html>
 <html><head>
 <style>
@@ -1003,6 +1170,12 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     <div class="stat-label">Jensen's $${(yearlyTarget / 1000).toFixed(0)}K Target</div>
     <div class="progress-bg"><div class="progress-fill" style="width:${progress.toFixed(1)}%"></div></div>
     <div class="stat-detail">${formatCost(projectedYearly)}/year projected (${progress.toFixed(1)}%)</div>
+  </div>
+  <div class="divider"></div>
+  <div class="stat">
+    <div class="stat-label">Energy Used</div>
+    <div class="stat-value">${formatEnergy(sidebarEnergy.totalWh)}</div>
+    <div class="stat-detail">Today: ${formatEnergy(todayEnergy.totalWh)} | CO2: ${formatCO2(sidebarCO2)}</div>
   </div>
   <div class="divider"></div>
   <div class="stat">

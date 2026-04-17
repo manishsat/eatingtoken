@@ -4,13 +4,14 @@
  */
 
 import * as vscode from 'vscode';
-import { formatTokenCount, formatCost } from './tokenCounter';
+import { formatTokenCount, formatCost, formatEnergy, formatCO2, estimateCO2Grams } from './tokenCounter';
 
 export class StatusBarManager implements vscode.Disposable {
   private statusBarItem: vscode.StatusBarItem;
   private sessionInputTokens: number = 0;
   private sessionOutputTokens: number = 0;
   private sessionCost: number = 0;
+  private sessionEnergyWh: number = 0;
   private format: string = 'tokens-and-cost';
 
   constructor() {
@@ -29,15 +30,17 @@ export class StatusBarManager implements vscode.Disposable {
     this.updateDisplay();
   }
 
-  addInputTokens(tokens: number, cost: number): void {
+  addInputTokens(tokens: number, cost: number, energyWh: number = 0): void {
     this.sessionInputTokens += tokens;
     this.sessionCost += cost;
+    this.sessionEnergyWh += energyWh;
     this.updateDisplay();
   }
 
-  addOutputTokens(tokens: number, cost: number): void {
+  addOutputTokens(tokens: number, cost: number, energyWh: number = 0): void {
     this.sessionOutputTokens += tokens;
     this.sessionCost += cost;
+    this.sessionEnergyWh += energyWh;
     this.updateDisplay();
   }
 
@@ -45,6 +48,7 @@ export class StatusBarManager implements vscode.Disposable {
     const totalTokens = this.sessionInputTokens + this.sessionOutputTokens;
     const tokensStr = formatTokenCount(totalTokens);
     const costStr = formatCost(this.sessionCost);
+    const energyStr = formatEnergy(this.sessionEnergyWh);
 
     switch (this.format) {
       case 'tokens-only':
@@ -59,11 +63,13 @@ export class StatusBarManager implements vscode.Disposable {
         break;
     }
 
+    const co2 = estimateCO2Grams(this.sessionEnergyWh);
     this.statusBarItem.tooltip = [
       'Eating Token - Copilot Usage Tracker',
       `Session Input: ${formatTokenCount(this.sessionInputTokens)} tokens`,
       `Session Output: ${formatTokenCount(this.sessionOutputTokens)} tokens`,
       `Estimated Cost: ${costStr}`,
+      `Energy: ${energyStr} | CO2: ${formatCO2(co2)}`,
       '',
       'Click to open dashboard',
     ].join('\n');
@@ -73,6 +79,7 @@ export class StatusBarManager implements vscode.Disposable {
     this.sessionInputTokens = 0;
     this.sessionOutputTokens = 0;
     this.sessionCost = 0;
+    this.sessionEnergyWh = 0;
     this.updateDisplay();
   }
 
@@ -81,6 +88,7 @@ export class StatusBarManager implements vscode.Disposable {
       inputTokens: this.sessionInputTokens,
       outputTokens: this.sessionOutputTokens,
       cost: this.sessionCost,
+      energyWh: this.sessionEnergyWh,
     };
   }
 
