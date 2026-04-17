@@ -24,7 +24,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "^\\[watch\\]",
-          "endsPattern": "^.*Done in \\d+"
+          "endsPattern": "^\\[watch\\] build finished"
         }
       }
     }

@@ -59,7 +59,7 @@ export class StatusBarManager implements vscode.Disposable {
         break;
       case 'tokens-and-cost':
       default:
-        this.statusBarItem.text = `$(flame) ${tokensStr} | ${costStr}`;
+        this.statusBarItem.text = `$(flame) ${tokensStr} | ${costStr} | ${energyStr}`;
         break;
     }
 

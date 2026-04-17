@@ -297,7 +297,7 @@ describe('formatEnergy', () => {
   });
 
   it('should format small values in Wh', () => {
-    expect(formatEnergy(0.5)).toBe('0.500 Wh');
+    expect(formatEnergy(0.5)).toBe('0.50 Wh');
   });
 
   it('should format medium values in Wh', () => {
@@ -305,7 +305,7 @@ describe('formatEnergy', () => {
   });
 
   it('should format large values in kWh', () => {
-    expect(formatEnergy(1500)).toBe('1.500 kWh');
+    expect(formatEnergy(1500)).toBe('1.50 kWh');
   });
 });
 

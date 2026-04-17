@@ -449,18 +449,35 @@ We built per-model energy estimates in Watt-hours per token, accounting for:
 
 **`tokenCounter.ts`** -- Added `MODEL_ENERGY` table, `estimateEnergy()`, `estimateCO2Grams()`, `getEnergyComparisons()`, `formatEnergy()`, `formatCO2()`, and `whToKwh()`.
 
-**Status bar** -- Tooltip now shows energy consumption and CO2 emissions for the current session.
+**Status bar** -- Now shows energy inline: `$(flame) 6.9K | $0.067 | 0.50 Wh`. Tooltip also includes energy and CO2 for the session.
 
-**Dashboard** -- New "Energy & Environment" section with:
-- Today's energy and CO2
-- All-time energy and CO2
-- Average daily energy with yearly projection
-- Energy over time chart (bar chart, 7/30 day toggle)
+**Dashboard summary tiles** -- Added a 5th tile "All-Time Energy" (green) alongside the original 4 tiles (5-column grid). Shows total energy with average per day in the detail line.
+
+**Dashboard Energy & Environment section** -- Dedicated section with:
+- 4 summary cards: Today's Energy, All-Time Energy, Avg Energy/Day, Carbon Intensity
+- Energy over time bar chart (synced with the 7/30 day toggle)
 - Real-world equivalents: phone charges, LED bulb hours, Google searches, EV miles
+- Methodology disclaimer
 
 **Sidebar** -- Added energy summary with today's energy and total CO2.
 
 **Tests** -- 23 new tests covering energy estimation, CO2 calculation, formatting, comparisons, and model energy data validation. Total: 111 tests, all passing.
+
+### UI Polish
+
+Several iterations on the dashboard layout:
+- Started with 6 tiles (2 energy tiles) -- too big, broke the visual rhythm
+- Tried 6-column grid -- too squished, labels wrapping
+- Tried embedding energy in cost tile detail lines -- felt hidden, didn't belong
+- Settled on **5 tiles in a single row**: original 4 + one "All-Time Energy" tile in green with avg/day detail
+
+Also fixed:
+- **Chart resize bug**: Charts (Usage Over Time, Model Usage, Energy) didn't resize when the VS Code panel was resized via the splitter. Added `min-width: 0` on grid items, `overflow: hidden` on sections, and a `ResizeObserver` that calls `chart.resize()` on all Chart.js instances.
+- **F5 debug prompt**: The `npm: watch` preLaunchTask's `endsPattern` didn't match esbuild's output (`[watch] build finished` vs the old `Done in \d+`), causing the "Waiting for preLaunchTask" prompt. Fixed the regex in `tasks.json`.
+
+### Version
+
+Bumped to v0.3.0 in `package.json` and dashboard header.
 
 ### Important Caveats
 

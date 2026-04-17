@@ -243,12 +243,12 @@ export function formatEnergy(wh: number): string {
     return `${(wh * 1000).toFixed(2)} mWh`;
   }
   if (wh < 1) {
-    return `${wh.toFixed(3)} Wh`;
+    return `${wh.toFixed(2)} Wh`;
   }
   if (wh < 1000) {
     return `${wh.toFixed(2)} Wh`;
   }
-  return `${(wh / 1000).toFixed(3)} kWh`;
+  return `${(wh / 1000).toFixed(2)} kWh`;
 }
 
 /**

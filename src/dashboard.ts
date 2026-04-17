@@ -310,6 +310,7 @@ export class DashboardPanel {
       color: var(--text);
       padding: 24px 32px;
       line-height: 1.5;
+      overflow-x: hidden;
     }
 
     /* ── Header ── */
@@ -340,7 +341,7 @@ export class DashboardPanel {
     /* ── Summary cards ── */
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 12px;
       margin-bottom: 24px;
     }
@@ -379,6 +380,7 @@ export class DashboardPanel {
       border-radius: 10px;
       padding: 20px;
       margin-bottom: 16px;
+      overflow: hidden;
     }
     .section-header {
       display: flex;
@@ -426,6 +428,7 @@ export class DashboardPanel {
       grid-template-columns: 1fr 1fr;
       gap: 16px;
       margin-bottom: 16px;
+      min-width: 0;
     }
     @media (max-width: 700px) {
       .charts-grid { grid-template-columns: 1fr; }
@@ -433,6 +436,7 @@ export class DashboardPanel {
     .chart-container {
       position: relative;
       height: 200px;
+      min-width: 0;
     }
 
     /* ── Jensen progress ── */
@@ -535,6 +539,7 @@ export class DashboardPanel {
       grid-template-columns: 1fr 1fr;
       gap: 16px;
       margin-top: 12px;
+      min-width: 0;
     }
     @media (max-width: 700px) {
       .model-grid { grid-template-columns: 1fr; }
@@ -542,6 +547,7 @@ export class DashboardPanel {
     .model-chart-container {
       position: relative;
       height: 220px;
+      min-width: 0;
     }
     .model-legend {
       display: flex;
@@ -634,6 +640,11 @@ export class DashboardPanel {
       <div class="label">All-Time Cost</div>
       <div class="value">${formatCost(allTime.totalCostUsd)}</div>
       <div class="detail">Avg ${formatCost(dailyAvgCost)}/day</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">All-Time Energy</div>
+      <div class="value" style="color:var(--green)">${formatEnergy(totalEnergyWh)}</div>
+      <div class="detail">Avg ${formatEnergy(dailyAvgEnergy)}/day</div>
     </div>
   </div>
 
@@ -1052,6 +1063,13 @@ export class DashboardPanel {
       energyChart.data.datasets[0].data = energy;
       energyChart.update('none');
     }
+
+    // ── Resize Observer: force Chart.js to resize when panel size changes ──
+    const allCharts = [tokenChart, costChart, energyChart];
+    const ro = new ResizeObserver(() => {
+      allCharts.forEach(c => c.resize());
+    });
+    ro.observe(document.body);
   </script>
 </body>
 </html>`;
