@@ -2,9 +2,17 @@ import { describe, it, expect } from 'vitest';
 import {
   countTokens,
   estimateCost,
+  estimateEnergy,
+  estimateCO2Grams,
   formatTokenCount,
   formatCost,
+  formatEnergy,
+  formatCO2,
+  getEnergyComparisons,
+  whToKwh,
   MODEL_PRICING,
+  MODEL_ENERGY,
+  GRID_CARBON_INTENSITY_KG_PER_KWH,
 } from '../tokenCounter';
 
 describe('countTokens', () => {
@@ -187,5 +195,160 @@ describe('MODEL_PRICING', () => {
       // Output should always cost more than input
       expect(pricing.outputPerMillion).toBeGreaterThan(pricing.inputPerMillion);
     }
+  });
+});
+
+// ─── Energy Estimation Tests ──────────────────────────────────────────────────
+
+describe('MODEL_ENERGY', () => {
+  it('should have energy data for all priced models', () => {
+    for (const model of Object.keys(MODEL_PRICING)) {
+      expect(MODEL_ENERGY).toHaveProperty(model);
+    }
+  });
+
+  it('should have positive energy values for all models', () => {
+    for (const [model, energy] of Object.entries(MODEL_ENERGY)) {
+      expect(energy.inputWhPerToken).toBeGreaterThan(0);
+      expect(energy.outputWhPerToken).toBeGreaterThan(0);
+      // Output tokens should cost more energy than input (decode vs prefill)
+      expect(energy.outputWhPerToken).toBeGreaterThan(energy.inputWhPerToken);
+    }
+  });
+
+  it('should have gpt-4o-mini be the most efficient model', () => {
+    const miniEnergy = MODEL_ENERGY['gpt-4o-mini'];
+    for (const [model, energy] of Object.entries(MODEL_ENERGY)) {
+      if (model === 'gpt-4o-mini') { continue; }
+      expect(miniEnergy.outputWhPerToken).toBeLessThanOrEqual(energy.outputWhPerToken);
+    }
+  });
+
+  it('should have larger models use more energy', () => {
+    // claude-opus (large) should use more than claude-sonnet (medium)
+    expect(MODEL_ENERGY['claude-opus-4.6'].outputWhPerToken)
+      .toBeGreaterThan(MODEL_ENERGY['claude-sonnet-4'].outputWhPerToken);
+    // gpt-4 (dense, large) should use more than gpt-4o (MoE, efficient)
+    expect(MODEL_ENERGY['gpt-4'].outputWhPerToken)
+      .toBeGreaterThan(MODEL_ENERGY['gpt-4o'].outputWhPerToken);
+  });
+});
+
+describe('estimateEnergy', () => {
+  it('should return zero for zero tokens', () => {
+    const result = estimateEnergy(0, 0, 'gpt-4o');
+    expect(result.inputWh).toBe(0);
+    expect(result.outputWh).toBe(0);
+    expect(result.totalWh).toBe(0);
+  });
+
+  it('should calculate energy for gpt-4o', () => {
+    const result = estimateEnergy(1_000_000, 100_000, 'gpt-4o');
+    // 1M input * 0.00038 = 380 Wh
+    expect(result.inputWh).toBeCloseTo(380, 0);
+    // 100K output * 0.0038 = 380 Wh
+    expect(result.outputWh).toBeCloseTo(380, 0);
+    expect(result.totalWh).toBeCloseTo(760, 0);
+  });
+
+  it('should calculate energy for gpt-4o-mini (much less)', () => {
+    const result = estimateEnergy(1_000_000, 100_000, 'gpt-4o-mini');
+    // 1M input * 0.000040 = 40 Wh
+    expect(result.inputWh).toBeCloseTo(40, 0);
+    // 100K output * 0.00040 = 40 Wh
+    expect(result.outputWh).toBeCloseTo(40, 0);
+    expect(result.totalWh).toBeCloseTo(80, 0);
+  });
+
+  it('should fallback to default for unknown model', () => {
+    const result = estimateEnergy(1000, 1000, 'unknown-model');
+    expect(result.totalWh).toBeGreaterThan(0);
+  });
+});
+
+describe('estimateCO2Grams', () => {
+  it('should return zero for zero energy', () => {
+    expect(estimateCO2Grams(0)).toBe(0);
+  });
+
+  it('should calculate CO2 correctly for 1 kWh', () => {
+    // 1000 Wh = 1 kWh * 0.39 kg/kWh * 1000 g/kg = 390 g
+    expect(estimateCO2Grams(1000)).toBeCloseTo(390, 0);
+  });
+
+  it('should scale linearly', () => {
+    const co2_100 = estimateCO2Grams(100);
+    const co2_200 = estimateCO2Grams(200);
+    expect(co2_200).toBeCloseTo(co2_100 * 2, 5);
+  });
+});
+
+describe('whToKwh', () => {
+  it('should convert Wh to kWh', () => {
+    expect(whToKwh(1000)).toBe(1);
+    expect(whToKwh(500)).toBe(0.5);
+    expect(whToKwh(0)).toBe(0);
+  });
+});
+
+describe('formatEnergy', () => {
+  it('should format very small values in mWh', () => {
+    expect(formatEnergy(0.0005)).toBe('0.50 mWh');
+  });
+
+  it('should format small values in Wh', () => {
+    expect(formatEnergy(0.5)).toBe('0.50 Wh');
+  });
+
+  it('should format medium values in Wh', () => {
+    expect(formatEnergy(42.5)).toBe('42.50 Wh');
+  });
+
+  it('should format large values in kWh', () => {
+    expect(formatEnergy(1500)).toBe('1.50 kWh');
+  });
+});
+
+describe('formatCO2', () => {
+  it('should format very small values in mg', () => {
+    expect(formatCO2(0.005)).toBe('5.0 mg');
+  });
+
+  it('should format small values in grams', () => {
+    expect(formatCO2(0.5)).toBe('0.50 g');
+  });
+
+  it('should format medium values in grams', () => {
+    expect(formatCO2(42)).toBe('42.0 g');
+  });
+
+  it('should format large values in kg', () => {
+    expect(formatCO2(1500)).toBe('1.50 kg');
+  });
+});
+
+describe('getEnergyComparisons', () => {
+  it('should return 4 comparison items', () => {
+    const comparisons = getEnergyComparisons(100);
+    expect(comparisons).toHaveLength(4);
+  });
+
+  it('should have expected labels', () => {
+    const comparisons = getEnergyComparisons(100);
+    const labels = comparisons.map(c => c.label);
+    expect(labels).toContain('Phone Charges');
+    expect(labels).toContain('LED Bulb Hours');
+    expect(labels).toContain('Google Searches');
+    expect(labels).toContain('EV Miles');
+  });
+
+  it('should return meaningful values for 100 Wh', () => {
+    const comparisons = getEnergyComparisons(100);
+    // 100 Wh / 12 Wh per charge ≈ 8.3 phone charges
+    const phoneCharges = comparisons.find(c => c.label === 'Phone Charges');
+    expect(parseFloat(phoneCharges!.value)).toBeCloseTo(8.3, 0);
+    // 100 Wh / 0.3 Wh per search ≈ 333 searches
+    const searches = comparisons.find(c => c.label === 'Google Searches');
+    expect(parseFloat(searches!.value)).toBeCloseTo(333, -1);
   });
 });
