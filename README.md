@@ -26,6 +26,16 @@ Toggle between 7-day and 30-day views. All data is stored locally in VS Code's g
 
 ![Dashboard](https://raw.githubusercontent.com/manishsat/eatingtoken/main/images/dashboard.png)
 
+### Energy Tracking
+
+See how much electricity your AI-assisted coding consumes. Per-model energy estimates based on H100 inference benchmarks, data center PUE, and published research.
+
+![Energy Tile](https://raw.githubusercontent.com/manishsat/eatingtoken/main/images/energy-tile-consumption.png)
+
+A dedicated Energy & Environment section shows energy over time, CO2 emissions, and real-world comparisons (phone charges, LED bulb hours, Google searches, EV miles).
+
+![Detailed Energy Consumption](https://raw.githubusercontent.com/manishsat/eatingtoken/main/images/detailed-energy-consumption.png)
+
 ### Multi-Window Support
 
 All VS Code windows contribute to a shared usage total. The dashboard shows combined data across all windows, while each window's status bar reflects its own live session.
@@ -131,7 +141,7 @@ npm install
 # Watch mode (auto-rebuild on changes)
 npm run watch
 
-# Run tests (88 tests across 7 files)
+# Run tests (111 tests across 7 files)
 npm test
 
 # Build for production
